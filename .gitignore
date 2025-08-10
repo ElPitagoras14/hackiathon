@@ -193,6 +193,7 @@ lib64/
 parts/
 sdist/
 var/
+user-data/
 wheels/
 share/python-wheels/
 *.egg-info/

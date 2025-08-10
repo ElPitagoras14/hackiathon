@@ -10,7 +10,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.mysql import CHAR
 from sqlalchemy.orm import relationship, declarative_base
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -21,9 +21,7 @@ class User(Base):
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     email = Column(String(255), nullable=False)
     password = Column(String(255), nullable=False)
-    created_at = Column(
-        DateTime, default=datetime.now(timezone.utc), nullable=False
-    )
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,
         default=datetime.utcnow,
@@ -44,7 +42,6 @@ class Company(Base):
     name = Column(String(255))
     ruc = Column(String(50), nullable=False)
     ig_url = Column(String(255), nullable=False)
-    industry = Column(String(255), nullable=False)
 
     user = relationship("User", back_populates="companies")
     financial_info = relationship(
@@ -58,7 +55,7 @@ class Company(Base):
 class FinancialInfo(Base):
     __tablename__ = "financial_info"
 
-    id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(Integer, primary_key=True, autoincrement=True)
     company_id = Column(
         Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False
     )

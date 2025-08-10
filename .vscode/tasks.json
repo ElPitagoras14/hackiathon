@@ -17,6 +17,15 @@
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       }
+    },
+    {
+      "label": "Run Celery",
+      "type": "shell",
+      "command": "${workspaceFolder}/backend/venv/Scripts/celery",
+      "args": ["-A", "tasks", "worker", "-l", "info"],
+      "options": {
+        "cwd": "${workspaceFolder}/celery"
+      }
     }
   ]
 }
