@@ -11,8 +11,8 @@ CREATE TABLE users (
 CREATE TABLE companies (
     id SERIAL PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name VARHAR,
-    ruc VACRCHAR NOT NULL,
+    name VARCHAR,
+    ruc VARCHAR NOT NULL,
     ig_url VARCHAR NOT NULL,
     industry VARCHAR NOT NULL
 );
