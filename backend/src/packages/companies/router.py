@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, Response, Depends
 from loguru import logger
+from sqlalchemy import func
 
 from queues import celery_app
 from utils.responses import (
@@ -24,13 +25,14 @@ from .responses import (
     Company,
     CompanyList,
     CompanyListOut,
+    FinancialInfo,
 )
 
 
 company_router = APIRouter()
 
 
-@company_router.get("/company")
+@company_router.get("")
 async def get_all_company(
     request: Request,
     response: Response,
@@ -39,9 +41,32 @@ async def get_all_company(
     request_id = request.state.request_id
     try:
         with DatabaseSession() as db:
-            companies = (
-                db.query(CompanyDB)
+            latest_fi_subq = (
+                db.query(
+                    FinancialInfoDB.company_id,
+                    func.max(FinancialInfoDB.created_at).label(
+                        "latest_created_at"
+                    ),
+                )
+                .filter(FinancialInfoDB.status == "COMPLETED")
+                .group_by(FinancialInfoDB.company_id)
+                .subquery()
+            )
+
+            companies_with_fi = (
+                db.query(CompanyDB, FinancialInfoDB)
                 .filter(CompanyDB.user_id == current_user["id"])
+                .outerjoin(
+                    latest_fi_subq, latest_fi_subq.c.company_id == CompanyDB.id
+                )
+                .outerjoin(
+                    FinancialInfoDB,
+                    (FinancialInfoDB.company_id == CompanyDB.id)
+                    & (
+                        FinancialInfoDB.created_at
+                        == latest_fi_subq.c.latest_created_at
+                    ),
+                )
                 .all()
             )
             parsed_companies = [
@@ -52,8 +77,30 @@ async def get_all_company(
                     ruc=company.ruc,
                     ig_url=company.ig_url,
                     industry=company.industry,
+                    financial_info=(
+                        FinancialInfo(
+                            id=financial_info.id,
+                            company_id=financial_info.company_id,
+                            account_status=financial_info.account_status,
+                            status=financial_info.status,
+                            average_cash_flow=financial_info.average_cash_flow,
+                            debt_ratio=financial_info.debt_ratio,
+                            income_variability=financial_info.income_variability,
+                            platform_reviews=financial_info.platform_reviews,
+                            social_media_activity=financial_info.social_media_activity,
+                            suppliers_reviews=financial_info.suppliers_reviews,
+                            customer_reviews=financial_info.customer_reviews,
+                            payment_compliance=financial_info.payment_compliance,
+                            on_time_delivery=financial_info.on_time_delivery,
+                            income_simulation=financial_info.income_simulation,
+                            reputation_simulation=financial_info.reputation_simulation,
+                            created_at=financial_info.created_at,
+                        )
+                        if financial_info
+                        else None
+                    ),
                 )
-                for company in companies
+                for company, financial_info in companies_with_fi
             ]
             return CompanyListOut(
                 request_id=request_id,
@@ -73,8 +120,8 @@ async def get_all_company(
         )
 
 
-@company_router.post("/scrape-info")
-async def scrape_info(
+@company_router.post("")
+async def create_company(
     request: Request,
     response: Response,
     company_info: CompanyInfo,
@@ -83,28 +130,56 @@ async def scrape_info(
     request_id = request.state.request_id
     try:
         with DatabaseSession() as db:
+            company = CompanyDB(
+                user_id=current_user["id"],
+                name=company_info.name,
+                ruc=company_info.ruc,
+                ig_url=company_info.ig_url,
+                industry=company_info.industry,
+            )
+            db.add(company)
+            db.commit()
+            db.refresh(company)
+            logger.info(f"Company {company.id} created")
+            return SuccessResponse(
+                request_id=request_id,
+                process_time=0,
+                func="create_company",
+                message="Company created",
+            )
+    except Exception as e:
+        logger.error(f"Error creating company: {e}")
+        response.status_code = 500
+        return InternalServerErrorResponse(
+            request_id=request_id, message=str(e), func="create_company"
+        )
+
+
+@company_router.post("/scrape-info")
+async def scrape_info(
+    request: Request,
+    response: Response,
+    company_id: int,
+    current_user=Depends(auth_scheme),
+):
+    request_id = request.state.request_id
+    try:
+        with DatabaseSession() as db:
             company = (
-                db.query(CompanyDB)
-                .filter(CompanyDB.ruc == company_info.ruc)
-                .first()
+                db.query(CompanyDB).filter(CompanyDB.id == company_id).first()
             )
             if not company:
-                company = Company(
-                    user_id=current_user["id"],
-                    name=company_info.name,
-                    ruc=company_info.ruc,
-                    ig_url=company_info.ig_url,
-                    industry=company_info.industry,
+                return NotFoundResponse(
+                    request_id=request_id,
+                    process_time=0,
+                    func="scrape_info",
+                    message="Company not found",
                 )
-                db.add(company)
-                db.commit()
-                db.refresh(company)
-                logger.info(f"Company {company.id} created")
 
             financial_info = (
                 db.query(FinancialInfoDB)
                 .filter(
-                    (FinancialInfoDB.company_id == company.id)
+                    (FinancialInfoDB.company_id == company_id)
                     & (FinancialInfoDB.status == "PENDING")
                 )
                 .first()
@@ -120,7 +195,7 @@ async def scrape_info(
                 )
 
             financial_info = FinancialInfoDB(
-                company_id=company.id,
+                company_id=company_id,
             )
             db.add(financial_info)
             db.commit()
@@ -130,8 +205,8 @@ async def scrape_info(
                 "scrape_task",
                 args=[
                     financial_info.id,
-                    company_info.ruc,
-                    company_info.ig_url,
+                    company.ruc,
+                    company.ig_url,
                 ],
             )
 
