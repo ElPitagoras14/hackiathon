@@ -1,6 +1,5 @@
 from .client import DatabaseSession
 from .models import (
-    User,
     Company,
     FinancialInfo,
     CreditRequest,

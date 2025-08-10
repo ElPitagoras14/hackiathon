@@ -1,6 +1,6 @@
 version: "3"
 services:
-  hackiathon-db:
+  ia-db:
     image: postgres:17.0
     ports:
       - "4002:5432"
@@ -11,6 +11,31 @@ services:
     volumes:
       # - ${DOCKER_DATA}/postgres-data:/var/lib/postgresql/data
       - ./backend/src/databases/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-    container_name: hackiathon-db
+    container_name: ia-db
 
     restart: unless-stopped
+
+  ia-redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    container_name: ia-redis
+
+  ia-queues:
+    build:
+      context: ./queues
+      dockerfile: Dockerfile
+    container_name: ia-queues
+    environment:
+      - C_FORCE_ROOT=true
+      - API_KEY=${API_KEY}
+      - REDIS_URL=redis://ia-redis:6379
+      - IN_DOCKER=true
+      - IG_USERNAME=${IG_USERNAME}
+      - IG_PASSWORD=${IG_PASSWORD}
+      - POSTGRES_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@ia-db:5432/${POSTGRES_DB}
+    restart: unless-stopped
+    depends_on:
+      - ia-redis
+      - ia-db
