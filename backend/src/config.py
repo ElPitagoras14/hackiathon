@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class GeneralSettings(BaseSettings):
     API_PORT: int
+    REDIS_URL: str
 
     SECRET_KEY: str
     ALGORITHM: str

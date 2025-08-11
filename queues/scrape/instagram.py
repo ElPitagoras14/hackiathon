@@ -323,6 +323,8 @@ async def scrape_instagram(browser, url, uid):
     with open(f"{folder_path}/{uid}.json", "w", encoding="utf-8") as f:
         json.dump(final_json, f, indent=2, ensure_ascii=False)
 
+    print(f"Scraping results saved in {folder_path}/{uid}.json")
+
     await page.close()
 
     return final_json
