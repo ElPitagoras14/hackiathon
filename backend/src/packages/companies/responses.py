@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
-from utils.responses import SuccessResponse
+from ...utils.responses import SuccessResponse
 
 
 class FinancialInfo(BaseModel):
