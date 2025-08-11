@@ -9,6 +9,7 @@ API_KEY = general_settings.API_KEY
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
+folder_path = os.path.join(parent_dir, "generated")
 
 
 llm = ChatOpenAI(
@@ -33,6 +34,72 @@ async def download_pdf(page, url_pdf, output_path):
         print(f"PDF descargado en {output_path}")
     else:
         print(f"Error al descargar PDF: {response.status}")
+
+
+async def get_file(page, uid, query: str, row: int):
+    search_input = await page.query_selector(
+        "input#frmInformacionCompanias\\:tabViewDocumentacion\\:"
+        + "tblDocumentosEconomicos\\:j_idt969\\:filter"
+    )
+    await search_input.click()
+    await search_input.press("Control+A")  # Seleccionar todo
+    await search_input.press("Backspace")  # Borrar
+    await search_input.type(query, delay=100)
+
+    await process_loading(page)
+
+    await page.wait_for_selector(
+        "#frmInformacionCompanias\\:tabViewDocumentacion\\:"
+        + "tblDocumentosEconomicos_paginator_bottom > a",
+        timeout=4000,
+    )
+    nav_bar = await page.query_selector_all(
+        "#frmInformacionCompanias\\:tabViewDocumentacion\\:"
+        + "tblDocumentosEconomicos_paginator_bottom > a"
+    )
+    last_page = nav_bar[-1]
+    classes = await last_page.get_attribute("class")
+    if classes and "ui-state-disabled" not in classes:
+        await last_page.click()
+
+    await process_loading(page)
+
+    rows = []
+    try:
+        await page.wait_for_selector(
+            "tbody#frmInformacionCompanias\\:tabViewDocumentacion\\:"
+            + "tblDocumentosEconomicos_data > tr",
+            timeout=8000,
+        )
+        rows = await page.query_selector_all(
+            "tbody#frmInformacionCompanias\\:tabViewDocumentacion\\:"
+            + "tblDocumentosEconomicos_data > tr",
+        )
+        last_balance = rows[row]
+        pdf_link = await last_balance.query_selector("a")
+        await pdf_link.click()
+    except Exception:
+        print("No tiene balance")
+        return None
+
+    await process_loading(page)
+
+    await asyncio.sleep(2)
+
+    parsed_search_input = query.lower()
+
+    if pdf_doc[uid]:
+        await download_pdf(
+            page,
+            pdf_doc[uid],
+            f"{folder_path}/{uid}-{parsed_search_input}.pdf",
+        )
+
+    await page.wait_for_selector("div#dlgPresentarDocumentoPdf a")
+    close_btn = await page.query_selector("div#dlgPresentarDocumentoPdf a")
+    await close_btn.click()
+
+    return f"{uid}-{parsed_search_input}.pdf"
 
 
 async def supercias_ocr(llm, image_jshandle):
@@ -95,7 +162,6 @@ async def process_loading(page):
 
 
 async def scrape_supercias(browser, ruc, uid):
-    folder_path = os.path.join(parent_dir, "generated")
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
@@ -115,19 +181,19 @@ async def scrape_supercias(browser, ruc, uid):
         ".ui-radiobutton-icon.ui-icon.ui-c.ui-icon-blank"
     )
     await radio_blanks[0].click()
-    # print("Clickeando RUC")
+    print("Clickeando RUC")
 
     await asyncio.sleep(0.2)
 
     text_input = await page.query_selector("input[type='text']")
     await text_input.type(ruc, delay=100)
-    # print("Escribiendo RUC")
+    print("Escribiendo RUC")
 
     await asyncio.sleep(0.2)
 
     first_li_result = await page.query_selector("ul li")
     await first_li_result.click()
-    # print("Seleccionando 1er resultado del autocomplete")
+    print("Seleccionando 1er resultado del autocomplete")
 
     await asyncio.sleep(0.2)
 
@@ -148,18 +214,18 @@ async def scrape_supercias(browser, ruc, uid):
     )
     ocr_input = await tbody_handle.query_selector("input[type='text']")
     await ocr_input.type(ocr_text, delay=50)
-    # print("Escribiendo el texto ocr")
+    print("Escribiendo el texto ocr")
 
     button_span = await page.query_selector(".ui-button-text.ui-c")
     parent_span = await button_span.evaluate_handle("el => el.parentElement")
     await parent_span.click()
-    # print("Clickeando boton verificar")
+    print("Clickeando boton verificar")
 
     await asyncio.sleep(0.2)
 
     online_docs = await page.wait_for_selector("#frmMenu\\:menuDocumentacion")
     await online_docs.click()
-    # print("Clickeando Documentos onlines")
+    print("Clickeando Documentos onlines")
 
     await process_loading(page)
 
@@ -167,63 +233,28 @@ async def scrape_supercias(browser, ruc, uid):
         "#frmInformacionCompanias\\:tabViewDocumentacion\\:j_idt964"
     )
     await economic_docs.click()
-    # print("Clickeando Documentos economicos")
+    print("Clickeando Documentos economicos")
 
     await process_loading(page)
 
-    search_input = await page.query_selector(
-        "input#frmInformacionCompanias\\:tabViewDocumentacion\\:"
-        + "tblDocumentosEconomicos\\:j_idt969\\:filter"
-    )
-    await search_input.type("BALANCE", delay=100)
-
-    await process_loading(page)
-
-    await page.wait_for_selector(
-        "#frmInformacionCompanias\\:tabViewDocumentacion\\:"
-        + "tblDocumentosEconomicos_paginator_bottom > a",
-        timeout=4000,
-    )
-    nav_bar = await page.query_selector_all(
-        "#frmInformacionCompanias\\:tabViewDocumentacion\\:"
-        + "tblDocumentosEconomicos_paginator_bottom > a"
-    )
-    last_page = nav_bar[-1]
-    classes = await last_page.get_attribute("class")
-    if classes and "ui-state-disabled" not in classes:
-        await last_page.click()
-
-    await process_loading(page)
-
-    rows = []
-    try:
-        await page.wait_for_selector(
-            "tbody#frmInformacionCompanias\\:tabViewDocumentacion\\:"
-            + "tblDocumentosEconomicos_data > tr",
-            timeout=8000,
-        )
-        rows = await page.query_selector_all(
-            "tbody#frmInformacionCompanias\\:tabViewDocumentacion\\:"
-            + "tblDocumentosEconomicos_data > tr",
-        )
-        print(len(rows))
-        last_balance = rows[-1]
-        pdf_link = await last_balance.query_selector("a")
-        await pdf_link.click()
-    except Exception:
-        print("No tiene balance")
-        no_doc_json = {
-            "name": None,
-        }
-        return no_doc_json
-
-    await process_loading(page)
-
-    await asyncio.sleep(2)
-
-    if pdf_doc[uid]:
-        await download_pdf(page, pdf_doc[uid], f"{folder_path}/{uid}.pdf")
+    state_file = await get_file(page, uid, "BALANCE", -1)
+    flujo_file = await get_file(page, uid, "FLUJO", -2)
+    integral_file = await get_file(page, uid, "INTEGRAL", -2)
 
     return {
-        "name": f"{uid}.pdf",
+        "state": state_file,
+        "flujo": flujo_file,
+        "integral": integral_file,
     }
+
+
+async def scrape_supercias_wrapper(browser, ruc, uid):
+    try:
+        return await scrape_supercias(browser, ruc, uid)
+    except Exception as e:
+        print(e)
+        return {
+            "state": None,
+            "flujo": None,
+            "integral": None,
+        }

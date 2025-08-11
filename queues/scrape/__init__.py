@@ -1,2 +1,2 @@
-from .supercias import scrape_supercias
-from .instagram import scrape_instagram
+from .supercias import scrape_supercias_wrapper
+from .instagram import scrape_instagram_wrapper

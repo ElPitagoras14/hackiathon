@@ -328,3 +328,14 @@ async def scrape_instagram(browser, url, uid):
     await page.close()
 
     return final_json
+
+
+async def scrape_instagram_wrapper(browser, ig_url, uid):
+    try:
+        return await scrape_instagram(browser, ig_url, uid)
+    except Exception as e:
+        print(e)
+        return {
+            "profile": {},
+            "posts": [],
+        }
