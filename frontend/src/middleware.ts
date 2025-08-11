@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 const AUTH_SECRET = "secret";
 
-const unprotectedPaths = ["/login", "/register", "/"];
+const unprotectedPaths = ["/login", "/register", "/","/empresas","/dashboard","/simulacion", "/analisis"];
 
 
 export default auth(async (req) => {
