@@ -8,7 +8,7 @@ from ...utils.responses import (
     NotFoundResponse,
     SuccessResponse,
 )
-from ...databases.algo import (
+from ...databases.postgres import (
     DatabaseSession,
     Company as CompanyDB,
     FinancialInfo as FinancialInfoDB,
