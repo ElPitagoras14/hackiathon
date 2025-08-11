@@ -3,12 +3,12 @@ from loguru import logger
 from sqlalchemy import func
 
 from queues import celery_app
-from utils.responses import (
+from ...utils.responses import (
     InternalServerErrorResponse,
     NotFoundResponse,
     SuccessResponse,
 )
-from databases.postgres import (
+from ...databases.algo import (
     DatabaseSession,
     Company as CompanyDB,
     FinancialInfo as FinancialInfoDB,

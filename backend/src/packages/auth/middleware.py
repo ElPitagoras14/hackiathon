@@ -2,7 +2,7 @@ from fastapi import Request, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 
-from databases.postgres import DatabaseSession, User
+from ...databases.postgres import DatabaseSession, User
 from .config import auth_settings
 
 SECRET_KEY = auth_settings.SECRET_KEY
