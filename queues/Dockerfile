@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir \
     psycopg2 \
     redis \
     loguru \
+    filelock \
     celery
 
 # Instala navegadores y dependencias de Playwright para Chromium
