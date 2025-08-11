@@ -1,19 +1,38 @@
 version: "3"
 services:
+  ia-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "4001:${API_PORT}"
+    container_name: ia-api
+    environment:
+      - API_PORT=${API_PORT}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXP_MIN=${ACCESS_TOKEN_EXP_MIN}
+      - REFRESH_TOKEN_EXP_DAY=${REFRESH_TOKEN_EXP_DAY}
+      - POSTGRES_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@ia-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://ia-redis:6379
+    restart: unless-stopped
+    depends_on:
+      - ia-db
+      - ia-redis
+
   ia-db:
     image: postgres:17.0
     ports:
       - "4002:5432"
+    container_name: ia-db
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
+    restart: unless-stopped
     volumes:
       # - ${DOCKER_DATA}/postgres-data:/var/lib/postgresql/data
       - ./backend/src/databases/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-    container_name: ia-db
-
-    restart: unless-stopped
 
   ia-redis:
     image: redis:latest
