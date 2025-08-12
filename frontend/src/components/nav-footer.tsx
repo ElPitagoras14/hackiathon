@@ -25,7 +25,7 @@ export function NavFooter() {
             {state === "expanded" && (
               <div className="flex flex-col">
                 <p className="text-xs text-muted-foreground">
-                  "User"
+                  User
                 </p>
               </div>
             )}

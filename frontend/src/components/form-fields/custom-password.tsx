@@ -29,13 +29,7 @@ export default function CustomPassword({
           {...field}
           placeholder={placeholder}
           type={showPassword ? "text" : "password"}
-          iconInfo={{
-            position: "right",
-            icon: showPassword ? EyeOff : Eye,
-            fn: () => {
-              setShowPassword(!showPassword);
-            },
-          }}
+          
         />
       </FormControl>
       <FormMessage />
