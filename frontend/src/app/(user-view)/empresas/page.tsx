@@ -15,6 +15,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useCompany } from "@/providers/company-provider";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 
 export default function CompanyPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -24,6 +31,7 @@ export default function CompanyPage() {
     ruc: "",
     nombre: "",
     instagramLink: "",
+    industry:"",
   });
 
 
@@ -36,20 +44,18 @@ export default function CompanyPage() {
     if (newCompany.ruc && newCompany.nombre && newCompany.instagramLink) {
       console.log("Adding new company:", newCompany);
       console.log("Company data:", {
-        id: Date.now().toString(),
         name: newCompany.nombre,
         ruc: newCompany.ruc,
         igUrl: newCompany.instagramLink,
-        industry: "Empresa",
+        industry: newCompany.industry || "Empresa",
       });
       addCompany({
-        id: Date.now().toString(),
         name: newCompany.nombre,
         ruc: newCompany.ruc,
         igUrl: newCompany.instagramLink,
-        industry: "Empresa",
+        industry: newCompany.industry || "Empresa",
       });
-      setNewCompany({ ruc: "", nombre: "", instagramLink: "" });
+      setNewCompany({ ruc: "", nombre: "", instagramLink: "", industry: "" });
       setIsDialogOpen(false);
     }
   };
@@ -132,6 +138,35 @@ export default function CompanyPage() {
                       className="border-gray-300 text-gray-900"
                     />
                   </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="industry" className="text-gray-900">
+                      Industria
+                    </Label>
+                    <Select
+                      value={newCompany.industry || undefined}
+                      onValueChange={(val) =>
+                        setNewCompany({ ...newCompany, industry: val })
+                      }
+                    >
+                      <SelectTrigger
+                        id="industry"
+                        className="w-full border-gray-300 text-gray-900"
+                      >
+                        <SelectValue placeholder="Selecciona la industria" />
+                      </SelectTrigger>
+                      <SelectContent className="w-[--radix-select-trigger-width]">
+                        <SelectItem value="Finance">Finanzas</SelectItem>
+                        <SelectItem value="Technology">Tecnología</SelectItem>
+                        <SelectItem value="Construction">
+                          Construcción
+                        </SelectItem>
+                        <SelectItem value="Manufacturing">
+                          Manufactura
+                        </SelectItem>
+                        <SelectItem value="Retail">Comercio</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button
@@ -179,48 +214,47 @@ export default function CompanyPage() {
             <div className="text-center py-8">
               <p className="text-gray-500">Cargando compañías...</p>
             </div>
-          ) : 
-          <div className="space-y-4">
-            {filteredCompanies.map((company) => (
-              <div
-                key={company.id}
-                className="flex items-center space-x-4 p-4 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex-1">
-                  <div className="flex flex-col">
-                    <span className="text-lg font-medium text-gray-900">
-                      {company.name}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      {company.industry}
-                    </span>
-                    <span className="text-xs text-gray-400 mt-1">
-                      RUC: {company.ruc}
-                    </span>
+          ) : (
+            <div className="space-y-4">
+              {filteredCompanies.map((company) => (
+                <div
+                  key={company.id}
+                  className="flex items-center space-x-4 p-4 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex-1">
+                    <div className="flex flex-col">
+                      <span className="text-lg font-medium text-gray-900">
+                        {company.name}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        {company.industry}
+                      </span>
+                      <span className="text-xs text-gray-400 mt-1">
+                        RUC: {company.ruc}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <a
+                      href={company.igUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                    >
+                      Ver Instagram
+                    </a>
                   </div>
                 </div>
-                <div className="text-right">
-                  <a
-                    href={company.igUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
-                  >
-                    Ver Instagram
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
-          }
-
+              ))}
+            </div>
+          )}
 
           {filteredCompanies.length === 0 && !loading && (
             <div className="text-center py-8">
               <p className="text-gray-500">No se encontraron compañías</p>
-              
+
               <p className="text-sm text-gray-400 mt-1">
-                {searchTerm 
+                {searchTerm
                   ? "Intenta con otros términos de búsqueda"
                   : "Agrega tu primera compañía"}
               </p>

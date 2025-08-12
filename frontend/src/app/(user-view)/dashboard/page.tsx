@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useCompany } from "@/providers/company-provider";
+import { useEffect } from "react";
 
 const riskFactors = [
   {
@@ -66,6 +67,11 @@ const getColors = (score: number) => {
   
 export default function DashboardPage() {
     const { selectedCompany, loading } = useCompany();
+
+    useEffect(() => {
+      console.log("Selected company:", selectedCompany);
+    }, [selectedCompany]);
+
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -241,43 +247,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Métricas Clave */}
-          <Card className="bg-white border-gray-200">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-                <DollarSign className="h-5 w-5" />
-                Métricas Clave
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600 mb-1">
-                    24%
-                  </div>
-                  <p className="text-xs text-gray-600">ROE</p>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600 mb-1">
-                    1.8
-                  </div>
-                  <p className="text-xs text-gray-600">Liquidez</p>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600 mb-1">
-                    45%
-                  </div>
-                  <p className="text-xs text-gray-600">Endeudamiento</p>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600 mb-1">
-                    12%
-                  </div>
-                  <p className="text-xs text-gray-600">Crecimiento</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>
