@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from jose import jwt
 from loguru import logger
 
-from ...databases.postgres import DatabaseSession, User
+from databases.postgres import DatabaseSession, User
 
 from .utils import get_hash, verify_password
 from .config import auth_settings

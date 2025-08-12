@@ -1,19 +1,13 @@
 import uuid
-import sys
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from loguru import logger
-from dotenv import load_dotenv
-from pathlib import Path
-load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-
-
-from .routes import router as app_router
+from routes import router as app_router
 from log import configure_logs
 from config import general_settings
+
 
 PORT = general_settings.API_PORT
 
@@ -66,9 +60,11 @@ async def add_logging_context(request: Request, call_next):
 
 app.include_router(app_router, prefix="/api")
 
+
 @app.get("/health")
 def health():
     return {"ok": True}
+
 
 if __name__ == "__main__":
     logger.info(f"Server running on port {PORT}")

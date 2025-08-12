@@ -2,19 +2,20 @@ from fastapi import APIRouter, Request, Response, Depends
 from loguru import logger
 from sqlalchemy import func
 
-from queues import celery_app
-from ...utils.responses import (
+from worker import celery_app
+from utils.responses import (
     InternalServerErrorResponse,
     NotFoundResponse,
     SuccessResponse,
 )
-from ...databases.postgres import (
+from databases.postgres import (
     DatabaseSession,
     Company as CompanyDB,
     FinancialInfo as FinancialInfoDB,
     CreditRequest as CreditRequestDB,
 )
 from packages.auth import auth_scheme
+
 from .schemas import CompanyInfo, CreditRequestInfo
 from .responses import (
     TaskOut,
