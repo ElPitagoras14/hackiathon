@@ -8,6 +8,7 @@ from config import general_settings
 from scrape import scrape_supercias_wrapper, scrape_instagram_wrapper
 from databases.postgres import DatabaseSession, FinancialInfo
 from filelock import FileLock, Timeout
+from ai_agent import analyze_company, SCORING_WEIGHTS
 
 REDIS_URL = general_settings.REDIS_URL
 IN_DOCKER = general_settings.IN_DOCKER
@@ -132,12 +133,15 @@ def scrape_task(financial_info_id, ruc, ig_url):
         db.refresh(financial_info)
     sync_wrapper(ruc, ig_url, uid)
     with DatabaseSession() as db:
+        analysis = analyze_company(uid)
         financial_info = (
             db.query(FinancialInfo)
             .filter(FinancialInfo.id == financial_info_id)
             .first()
         )
         financial_info.status = "COMPLETED"
+        for key in SCORING_WEIGHTS.keys():
+            financial_info.setattr(key, analysis.get(key, 0))
         db.commit()
         db.refresh(financial_info)
     return "Task completed"

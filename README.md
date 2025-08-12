@@ -4,7 +4,7 @@
 
 This project develops an AI-driven credit risk scoring solution for Ecuadorian SMEs lacking formal credit history, using non-traditional data like digital social media and commercial references to improve credit access and decision-making.
 
-[Read a more detailed description of the project.](https://hackiathon.com/en/projects/financial-risk-assessment-for-smes/)
+[Read a more detailed description of the project.](https://deepwiki.com/ElPitagoras14/hackiathon)
 
 The project is built on top of a frontend, backend, and Celery worker orchestrated by Docker Compose.
 
