@@ -53,3 +53,7 @@ if __name__ == "__main__":
     pdf = "estado"  # ejemplo
     final_df = extract_financial_table(pdf)
     final_df.to_csv(f"{pdf}.csv", index=False)
+
+# wrapper para compatibilidad con ai_agent
+def extract_financial_table_from_pdf(path: str):
+    return extract_financial_table(path)
