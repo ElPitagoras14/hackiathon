@@ -50,30 +50,30 @@ const MOCK_DB: Record<
   "1": [
     {
       id: "CR-001",
-      company_id: 1,
+      company_id: 15,
       amount: 50000,
       status: "APPROVED",
       created_at: daysAgo(30),
     },
     {
       id: "CR-002",
-      company_id: 1,
+      company_id: 15,
       amount: 120000,
       status: "REJECTED",
       reason:
-        "Insuficiente historial crediticio. Requiere al menos 24 meses con entidades financieras.",
+        "Nivel de riesgo alto por incumplimientos previos.",
       created_at: daysAgo(22),
     },
     {
       id: "CR-003",
-      company_id: 1,
+      company_id: 15,
       amount: 75000,
       status: "APPROVED",
       created_at: daysAgo(18),
     },
     {
       id: "CR-004",
-      company_id: 1,
+      company_id: 15,
       amount: 200000,
       status: "REJECTED",
       reason:
@@ -82,7 +82,7 @@ const MOCK_DB: Record<
     },
     {
       id: "CR-005",
-      company_id: 1,
+      company_id: 15,
       amount: 30000,
       status: "PENDING",
       created_at: daysAgo(2),
@@ -91,14 +91,14 @@ const MOCK_DB: Record<
   "2": [
     {
       id: "CR-101",
-      company_id: 2,
+      company_id: 15,
       amount: 90000,
       status: "APPROVED",
       created_at: daysAgo(15),
     },
     {
       id: "CR-102",
-      company_id: 2,
+      company_id: 15,
       amount: 180000,
       status: "REJECTED",
       reason: "Flujo de caja negativo últimos 3 meses.",
@@ -175,6 +175,7 @@ export default function AnalysisPage() {
     const companyId = selectedCompany?.id
       ? String(Number(selectedCompany.id))
       : undefined;
+      console.log("Fetching credits for company:", companyId);
 
     if (!companyId) {
       setCredits([]);
@@ -185,7 +186,8 @@ export default function AnalysisPage() {
     if (USE_MOCKS) {
       // simula latencia
       await new Promise((r) => setTimeout(r, 600));
-      const raw = MOCK_DB[companyId] ?? [];
+      const raw = MOCK_DB[1] ?? [];
+      console.log("Fetched credits:", raw);
       setCredits(
         raw
           .slice()
