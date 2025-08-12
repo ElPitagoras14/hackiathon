@@ -1,4 +1,20 @@
 services:
+  ia-web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    container_name: ia-web
+    environment:
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - AUTH_SECRET=${AUTH_SECRET}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - API_URL=http://ia-api:${API_PORT}
+    restart: unless-stopped
+    depends_on:
+      - ia-api
+
   ia-api:
     build:
       context: ./backend

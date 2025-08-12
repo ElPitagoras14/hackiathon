@@ -1,11 +1,13 @@
 import pdfplumber
 import pandas as pd
 
+
 def fill_values(row):
     values = [x for x in row[1:] if pd.notna(x)]
     while len(values) < 2:
         values.append(None)
     return pd.Series(values[:2])
+
 
 def extract_financial_table(uid_or_path):
     """
@@ -30,7 +32,7 @@ def extract_financial_table(uid_or_path):
                         and "VALOR" in "".join([str(x) for x in row])
                     ):
                         header_index = table.index(row)
-                        financial_data.extend(table[header_index + 1:])
+                        financial_data.extend(table[header_index + 1 :])
                         break
 
     df = pd.DataFrame(
@@ -41,18 +43,22 @@ def extract_financial_table(uid_or_path):
     df = df.dropna(how="all")
     rows = df.shape[0]
     if rows >= 2:
-        df = df.iloc[: rows - 2, :]  # limpia totales si los últimos 2 son sumas
+        df = df.iloc[
+            : rows - 2, :
+        ]  # limpia totales si los últimos 2 son sumas
 
     df[["code", "value"]] = df.apply(fill_values, axis=1)
     final_df = df[["account", "code", "value"]].copy()
     final_df["value"] = final_df["value"].astype(float)
     return final_df
 
+
 # Solo se ejecuta si corres este archivo directamente
 if __name__ == "__main__":
     pdf = "estado"  # ejemplo
     final_df = extract_financial_table(pdf)
     final_df.to_csv(f"{pdf}.csv", index=False)
+
 
 # wrapper para compatibilidad con ai_agent
 def extract_financial_table_from_pdf(path: str):

@@ -68,7 +68,7 @@ class CreditRequest(BaseModel):
     id: int
     company_id: int
     amount: float
-    reason: str
+    reason: str | None
     status: str
     created_at: datetime
 
