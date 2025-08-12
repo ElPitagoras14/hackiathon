@@ -2,7 +2,7 @@ import time
 from fastapi import APIRouter, Request, Response
 from loguru import logger
 
-from ...utils.responses import (
+from utils.responses import (
     ConflictResponse,
     InternalServerErrorResponse,
     SuccessResponse,
