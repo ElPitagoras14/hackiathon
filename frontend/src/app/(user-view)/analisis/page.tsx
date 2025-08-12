@@ -23,12 +23,98 @@ import {
   Clock,
 } from "lucide-react";
 
+/* ===========================
+   MOCKS
+   =========================== */
+const USE_MOCKS = true;
+
+// helper fecha ISO restando días
+const daysAgo = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString();
+};
+
+// “BD” en memoria por company_id
+const MOCK_DB: Record<
+  string,
+  Array<{
+    id: string | number;
+    company_id: number | string;
+    amount: number;
+    status: "APPROVED" | "REJECTED" | "PENDING";
+    reason?: string | null;
+    created_at: string; // ISO
+  }>
+> = {
+  "1": [
+    {
+      id: "CR-001",
+      company_id: 1,
+      amount: 50000,
+      status: "APPROVED",
+      created_at: daysAgo(30),
+    },
+    {
+      id: "CR-002",
+      company_id: 1,
+      amount: 120000,
+      status: "REJECTED",
+      reason:
+        "Insuficiente historial crediticio. Requiere al menos 24 meses con entidades financieras.",
+      created_at: daysAgo(22),
+    },
+    {
+      id: "CR-003",
+      company_id: 1,
+      amount: 75000,
+      status: "APPROVED",
+      created_at: daysAgo(18),
+    },
+    {
+      id: "CR-004",
+      company_id: 1,
+      amount: 200000,
+      status: "REJECTED",
+      reason:
+        "Ratio de endeudamiento 78% supera el máximo permitido (65%) para este monto.",
+      created_at: daysAgo(9),
+    },
+    {
+      id: "CR-005",
+      company_id: 1,
+      amount: 30000,
+      status: "PENDING",
+      created_at: daysAgo(2),
+    },
+  ],
+  "2": [
+    {
+      id: "CR-101",
+      company_id: 2,
+      amount: 90000,
+      status: "APPROVED",
+      created_at: daysAgo(15),
+    },
+    {
+      id: "CR-102",
+      company_id: 2,
+      amount: 180000,
+      status: "REJECTED",
+      reason: "Flujo de caja negativo últimos 3 meses.",
+      created_at: daysAgo(7),
+    },
+  ],
+};
+
+/* ===========================
+   Tipos y helpers
+   =========================== */
 type UiStatus = "aprobado" | "denegado" | "pendiente";
 
 interface ApiCreditRequest {
   id: number | string;
-  company_id?: number;
-  companyId?: number;
+  company_id?: number | string;
   amount: number;
   reason?: string | null;
   status: string;
@@ -66,6 +152,9 @@ const normalize = (r: ApiCreditRequest): Credit => ({
   reason: r.reason ?? undefined,
 });
 
+/* ===========================
+   Componente
+   =========================== */
 export default function AnalysisPage() {
   const { data: session } = useSession();
   const token = (session as any)?.accessToken as string | undefined;
@@ -82,38 +171,50 @@ export default function AnalysisPage() {
     if (credit.status === "denegado") setIsDrawerOpen(true);
   };
 
-  const handleSubmitCredit = async () => {
-    if (!selectedCompany?.id || !token || !creditAmount) return;
-    try {
-      const res = await fetch(`${COMPANIES_URL}/credit-request`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          company_id: Number(selectedCompany.id),
-          amount: Number(creditAmount),
-        }),
-      });
-      const txt = await res.text();
-      if (!res.ok) throw new Error(txt || "Error al solicitar el crédito");
-      setCreditAmount("");
-      // refresca lista
-      fetchCreditInfo();
-    } catch (e) {
-      console.error(e);
-      alert("No se pudo solicitar el crédito");
-    }
-  };
-
   const fetchCreditInfo = async () => {
-    if (!selectedCompany?.id || !token) return;
+    const companyId = selectedCompany?.id
+      ? String(Number(selectedCompany.id))
+      : undefined;
+
+    if (!companyId) {
+      setCredits([]);
+      return;
+    }
+
+    // MODO MOCK
+    if (USE_MOCKS) {
+      // simula latencia
+      await new Promise((r) => setTimeout(r, 600));
+      const raw = MOCK_DB[companyId] ?? [];
+      setCredits(
+        raw
+          .slice()
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime()
+          )
+          .map((r) =>
+            normalize({
+              id: r.id,
+              company_id: r.company_id,
+              amount: r.amount,
+              reason: r.reason,
+              status: r.status,
+              created_at: r.created_at,
+            })
+          )
+      );
+      return;
+    }
+
+    // MODO API real
+    if (!token) return;
     const url = new URL(
       CREDIT_URL,
       typeof window !== "undefined" ? window.location.origin : undefined
     );
-    url.searchParams.set("company_id", String(Number(selectedCompany.id)));
+    url.searchParams.set("company_id", companyId);
 
     const res = await fetch(url.toString(), {
       headers: {
@@ -147,6 +248,54 @@ export default function AnalysisPage() {
       : [];
 
     setCredits(raw.map(normalize));
+  };
+
+  const handleSubmitCredit = async () => {
+    const companyId = selectedCompany?.id
+      ? String(Number(selectedCompany.id))
+      : undefined;
+    if (!companyId || !creditAmount) return;
+
+    // MODO MOCK
+    if (USE_MOCKS) {
+      // simula post
+      await new Promise((r) => setTimeout(r, 400));
+      const newId = `CR-${Date.now().toString().slice(-6)}`;
+      const newItem = {
+        id: newId,
+        company_id: Number(companyId),
+        amount: Number(creditAmount),
+        status: "PENDING" as const,
+        created_at: new Date().toISOString(),
+      };
+      MOCK_DB[companyId] = [newItem, ...(MOCK_DB[companyId] ?? [])];
+      setCreditAmount("");
+      fetchCreditInfo();
+      return;
+    }
+
+    // MODO API real
+    if (!token) return;
+    try {
+      const res = await fetch(`${COMPANIES_URL}/credit-request`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          company_id: Number(companyId),
+          amount: Number(creditAmount),
+        }),
+      });
+      const txt = await res.text();
+      if (!res.ok) throw new Error(txt || "Error al solicitar el crédito");
+      setCreditAmount("");
+      fetchCreditInfo();
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo solicitar el crédito");
+    }
   };
 
   useEffect(() => {
@@ -295,7 +444,7 @@ export default function AnalysisPage() {
             side="right"
             className="p-0 w-[400px] sm:w-[560px] bg-white text-gray-900 dark:bg-neutral-900 dark:text-gray-100 shadow-xl"
           >
-            {selectedCredit && (
+            {selectedCredit && selectedCredit.status === "denegado" && (
               <div className="flex h-full flex-col">
                 <div className="sticky top-0 z-10 border-b border-gray-200 bg-red-50 dark:bg-red-950/20">
                   <div className="px-6 py-5">
