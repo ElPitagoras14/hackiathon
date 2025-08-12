@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useCompany } from "@/providers/company-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,77 +23,140 @@ import {
   Clock,
 } from "lucide-react";
 
+type UiStatus = "aprobado" | "denegado" | "pendiente";
+
+interface ApiCreditRequest {
+  id: number | string;
+  company_id?: number;
+  companyId?: number;
+  amount: number;
+  reason?: string | null;
+  status: string;
+  created_at?: string;
+  createdAt?: string;
+}
+
 interface Credit {
   id: string;
   amount: number;
-  status: "aprobado" | "denegado";
-  date: string;
+  status: UiStatus;
+  date: string; // ISO
   reason?: string;
-  details?: string;
 }
 
-const mockCredits: Credit[] = [
-  {
-    id: "CR-001",
-    amount: 50000,
-    status: "aprobado",
-    date: "2024-10-15",
-  },
-  {
-    id: "CR-002",
-    amount: 120000,
-    status: "denegado",
-    date: "2024-09-22",
-    reason: "Insuficiente historial crediticio",
-    details:
-      "La empresa no cuenta con un historial crediticio suficiente para el monto solicitado. Se requiere al menos 2 años de historial con instituciones financieras.",
-  },
-  {
-    id: "CR-003",
-    amount: 75000,
-    status: "aprobado",
-    date: "2024-08-10",
-  },
-  {
-    id: "CR-004",
-    amount: 200000,
-    status: "denegado",
-    date: "2024-07-05",
-    reason: "Ratio de endeudamiento elevado",
-    details:
-      "El ratio de endeudamiento actual (78%) supera el límite máximo permitido (65%) para créditos de este monto. Se recomienda reducir la deuda existente antes de solicitar nuevos créditos.",
-  },
-  {
-    id: "CR-005",
-    amount: 30000,
-    status: "aprobado",
-    date: "2024-06-18",
-  },
-];
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+const COMPANIES_URL = API_BASE ? `${API_BASE}/api/company` : "/api/company";
+const CREDIT_URL = API_BASE
+  ? `${API_BASE}/api/company/credit-requests`
+  : "/api/company/credit-requests";
+
+const mapStatus = (s: string): UiStatus => {
+  const v = (s || "").toLowerCase();
+  if (v.includes("denied") || v.includes("reject") || v === "denegado")
+    return "denegado";
+  if (v.includes("approved") || v === "aprobado") return "aprobado";
+  return "pendiente";
+};
+
+const normalize = (r: ApiCreditRequest): Credit => ({
+  id: String(r.id),
+  amount: Number(r.amount ?? 0),
+  status: mapStatus(r.status),
+  date: r.createdAt ?? r.created_at ?? new Date().toISOString(),
+  reason: r.reason ?? undefined,
+});
 
 export default function AnalysisPage() {
+  const { data: session } = useSession();
+  const token = (session as any)?.accessToken as string | undefined;
+
+  const { selectedCompany } = useCompany();
+
   const [creditAmount, setCreditAmount] = useState("");
+  const [credits, setCredits] = useState<Credit[]>([]);
   const [selectedCredit, setSelectedCredit] = useState<Credit | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const handleCreditClick = (credit: Credit) => {
-    if (credit.status === "denegado") {
-      setSelectedCredit(credit);
-      setIsDrawerOpen(true);
+    setSelectedCredit(credit);
+    if (credit.status === "denegado") setIsDrawerOpen(true);
+  };
+
+  const handleSubmitCredit = async () => {
+    if (!selectedCompany?.id || !token || !creditAmount) return;
+    try {
+      const res = await fetch(`${COMPANIES_URL}/credit-request`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          company_id: Number(selectedCompany.id),
+          amount: Number(creditAmount),
+        }),
+      });
+      const txt = await res.text();
+      if (!res.ok) throw new Error(txt || "Error al solicitar el crédito");
+      setCreditAmount("");
+      // refresca lista
+      fetchCreditInfo();
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo solicitar el crédito");
     }
   };
 
-  const handleSubmitCredit = () => {
-    if (creditAmount) {
-      alert(`Solicitud de crédito por S/ ${creditAmount} enviada`);
-      setCreditAmount("");
+  const fetchCreditInfo = async () => {
+    if (!selectedCompany?.id || !token) return;
+    const url = new URL(
+      CREDIT_URL,
+      typeof window !== "undefined" ? window.location.origin : undefined
+    );
+    url.searchParams.set("company_id", String(Number(selectedCompany.id)));
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      console.warn("credit-requests failed", res.status, text);
+      setCredits([]);
+      return;
     }
+
+    let body: any = {};
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = {};
+    }
+
+    const raw: any[] = Array.isArray(body)
+      ? body
+      : Array.isArray(body.items)
+      ? body.items
+      : Array.isArray(body.payload?.items)
+      ? body.payload.items
+      : [];
+
+    setCredits(raw.map(normalize));
   };
+
+  useEffect(() => {
+    fetchCreditInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCompany?.id, token]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
@@ -103,11 +168,10 @@ export default function AnalysisPage() {
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Calendar className="w-4 h-4" />
-            Actualizado: 15 Nov 2024
+            Actualizado: {new Date().toLocaleDateString("es-ES")}
           </div>
         </div>
 
-        {/* Solicitar Crédito */}
         <Card className="mb-6 bg-white border-gray-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
@@ -128,9 +192,9 @@ export default function AnalysisPage() {
                   id="amount"
                   type="number"
                   placeholder="Ej: 100000"
+                  className="mt-1 text-black dark:text-black border-gray-300"
                   value={creditAmount}
                   onChange={(e) => setCreditAmount(e.target.value)}
-                  className="mt-1"
                 />
               </div>
               <Button
@@ -144,7 +208,6 @@ export default function AnalysisPage() {
           </CardContent>
         </Card>
 
-        {/* Historial de Créditos */}
         <Card className="bg-white border-gray-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
@@ -157,7 +220,13 @@ export default function AnalysisPage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4">
-              {mockCredits.map((credit) => (
+              {credits.length === 0 && (
+                <div className="text-sm text-gray-600">
+                  Aún no hay solicitudes.
+                </div>
+              )}
+
+              {credits.map((credit) => (
                 <div
                   key={credit.id}
                   className={`p-4 border border-gray-200 rounded-lg transition-colors ${
@@ -171,16 +240,24 @@ export default function AnalysisPage() {
                     <div className="flex items-center gap-3">
                       {credit.status === "aprobado" ? (
                         <CheckCircle className="w-6 h-6 text-green-600" />
-                      ) : (
+                      ) : credit.status === "denegado" ? (
                         <XCircle className="w-6 h-6 text-red-600" />
+                      ) : (
+                        <Clock className="w-6 h-6 text-blue-600" />
                       )}
                       <div>
                         <p className="font-semibold text-gray-900">
-                          S/ {credit.amount.toLocaleString()}
+                          S/ {Number(credit.amount).toLocaleString("es-PE")}
                         </p>
                         <p className="text-sm text-gray-600">
-                          Código: {credit.id}
+                          Fecha:{" "}
+                          {new Date(credit.date).toLocaleDateString("es-ES")}
                         </p>
+                        {credit.status === "denegado" && credit.reason && (
+                          <p className="text-xs text-red-700 mt-1 line-clamp-1">
+                            Motivo: {credit.reason}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
@@ -188,14 +265,17 @@ export default function AnalysisPage() {
                         className={
                           credit.status === "aprobado"
                             ? "bg-green-100 text-green-800 hover:bg-green-100"
-                            : "bg-red-100 text-red-800 hover:bg-red-100"
+                            : credit.status === "denegado"
+                            ? "bg-red-100 text-red-800 hover:bg-red-100"
+                            : "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
                         }
                       >
-                        {credit.status === "aprobado" ? "Aprobado" : "Denegado"}
+                        {credit.status === "pendiente"
+                          ? "Pendiente"
+                          : credit.status === "aprobado"
+                          ? "Aprobado"
+                          : "Denegado"}
                       </Badge>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {new Date(credit.date).toLocaleDateString("es-ES")}
-                      </p>
                     </div>
                   </div>
                   {credit.status === "denegado" && (
@@ -210,8 +290,6 @@ export default function AnalysisPage() {
           </CardContent>
         </Card>
 
-        {/* Drawer para motivos de rechazo */}
-        {/* Drawer para motivos de rechazo (mejorado) */}
         <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
           <SheetContent
             side="right"
@@ -219,7 +297,6 @@ export default function AnalysisPage() {
           >
             {selectedCredit && (
               <div className="flex h-full flex-col">
-                {/* Header fijo */}
                 <div className="sticky top-0 z-10 border-b border-gray-200 bg-red-50 dark:bg-red-950/20">
                   <div className="px-6 py-5">
                     <div className="flex items-center gap-3">
@@ -229,76 +306,65 @@ export default function AnalysisPage() {
                       </h2>
                     </div>
                     <p className="mt-1 text-sm text-red-700 dark:text-red-300/80">
-                      {selectedCredit.reason}
+                      {selectedCredit.reason || "Sin motivo especificado"}
                     </p>
                   </div>
                 </div>
 
-                {/* Cuerpo scrollable */}
                 <div className="flex-1 overflow-y-auto px-6 py-6">
-                  {/* Datos clave en grid, misma jerarquía que el resto */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-xs uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                        Código de Solicitud
+                        Código
                       </p>
-                      <p className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                        {selectedCredit.id}
-                      </p>
+                      <p className="mt-1 font-medium">{selectedCredit.id}</p>
                     </div>
-
                     <div>
                       <p className="text-xs uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                        Monto Solicitado
+                        Monto
                       </p>
-                      <p className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                        S/ {selectedCredit.amount.toLocaleString()}
+                      <p className="mt-1 font-medium">
+                        S/{" "}
+                        {Number(selectedCredit.amount).toLocaleString("es-PE")}
                       </p>
                     </div>
-
                     <div>
                       <p className="text-xs uppercase tracking-wide text-gray-600 dark:text-gray-400">
-                        Fecha de Solicitud
+                        Fecha
                       </p>
-                      <p className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                      <p className="mt-1 font-medium">
                         {new Date(selectedCredit.date).toLocaleDateString(
                           "es-ES"
                         )}
                       </p>
                     </div>
-
                     <div>
                       <p className="text-xs uppercase tracking-wide text-gray-600 dark:text-gray-400">
                         Estado
                       </p>
                       <div className="mt-1">
-                        <Badge className="bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300">
+                        <Badge className="bg-red-100 text-red-800">
                           Denegado
                         </Badge>
                       </div>
                     </div>
                   </div>
 
-                  {/* Detalles */}
-                  {selectedCredit.details && (
+                  {selectedCredit.reason && (
                     <div className="mt-6">
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        Detalles
+                      <h3 className="text-sm font-medium">
+                        Motivo del rechazo
                       </h3>
                       <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                        {selectedCredit.details}
+                        {selectedCredit.reason}
                       </p>
                     </div>
                   )}
 
-                  {/* Separador */}
                   <div className="my-6 h-px bg-gray-200 dark:bg-gray-800" />
 
-                  {/* Recomendaciones con iconos azules como en el resto */}
                   <div>
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      Recomendaciones
-                    </h3>
+                    <h3 className="text-sm font-medium">Recomendaciones</h3>
                     <div className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300">
                       <div className="flex items-start gap-2">
                         <TrendingDown className="w-4 h-4 mt-0.5 text-blue-600" />
@@ -317,7 +383,6 @@ export default function AnalysisPage() {
                   </div>
                 </div>
 
-                {/* Footer fijo, estilo de card claro */}
                 <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-gray-50 dark:bg-neutral-950/30 px-6 py-4">
                   <div className="flex gap-3">
                     <Button
@@ -327,10 +392,6 @@ export default function AnalysisPage() {
                     >
                       Cerrar
                     </Button>
-                    {/* opcional: acción secundaria con el mismo gradiente del dashboard */}
-                    {/* <Button className="flex-1 bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white">
-              Ver recomendaciones personalizadas
-            </Button> */}
                   </div>
                 </div>
               </div>

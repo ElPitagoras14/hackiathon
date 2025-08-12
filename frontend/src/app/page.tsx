@@ -8,9 +8,18 @@ export default function Home() {
   return (
     <div>
       <Header />
-      <Hero /> 
-      <KeyBenefits />
-      <HowItWorks />
+      <section id="producto">
+        <Hero />
+      </section>
+
+      <section id="beneficios">
+        <KeyBenefits />
+      </section>
+
+      <section id="casos-uso">
+        <HowItWorks />
+      </section>
+      
       <Footer />
     </div>
   );

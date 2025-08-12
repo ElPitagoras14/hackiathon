@@ -30,9 +30,33 @@ export function NavCompany() {
   };
 
   const currentCompany = companies.find((c) => c.id === selectedCompany?.id);
+  if (companies.length === 0 ) {
+    return (
+      <SidebarGroup>
+        <SidebarMenu>
+          <div className="py-4 border-b border-slate-700 px-4">
+            <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-3">
+              No hay empresas registradas
+            </p>
+          </div>
+        </SidebarMenu>
+      </SidebarGroup>
+    );
+  }
   if (!currentCompany) {
-    return <div className="p-4 text-white">No hay empresa seleccionada</div>;
-  }  
+    return (
+      <SidebarGroup>
+        <SidebarMenu>
+          <div className="py-4 border-b border-slate-700 px-4">
+            <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-3">
+              Empresa no encontrada
+            </p>
+          </div>
+        </SidebarMenu>
+      </SidebarGroup>
+    );
+  }
+
   return (
     <SidebarGroup>
       <SidebarMenu>
@@ -49,7 +73,7 @@ export function NavCompany() {
                 <div
                   className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-semibold text-sm bg-black`}
                 >
-                  {currentCompany.name.charAt(0)}
+                  {currentCompany!.name.charAt(0)}
                 </div>
                 <div className="flex-1 text-left">
                   <p className="font-medium text-sm">{currentCompany?.name}</p>
@@ -67,7 +91,7 @@ export function NavCompany() {
               {companies.map((company) => (
                 <SelectItem
                   key={company.id}
-                  value={company.id}
+                  value={company.id!}
                   className="text-white hover:bg-slate-700 focus:bg-slate-700 p-3"
                 >
                   <div className="flex items-center gap-3 py-1">

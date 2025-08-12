@@ -18,8 +18,6 @@ export default function Header() {
     { name: "Producto", href: "#producto" },
     { name: "Beneficios", href: "#beneficios" },
     { name: "Casos de uso", href: "#casos-uso" },
-    { name: "Seguridad", href: "#seguridad" },
-    { name: "Precios", href: "#precios" },
   ];
 
 
