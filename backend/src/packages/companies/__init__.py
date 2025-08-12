@@ -1,1 +1,1 @@
-from .router import company_router
+__all__ = []

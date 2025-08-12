@@ -1,6 +1,12 @@
 from fastapi import APIRouter, Request, Response, Depends
 from loguru import logger
 from sqlalchemy import func
+from packages.ai.llm import generate_insights
+from .config import company_settings 
+
+from packages.companies.config import company_settings  # <- solicitado
+from packages.ai.agent import analyze_company, credit_decision
+from queues.ai_agent import analyze_company, credit_decision
 
 from queues import celery_app
 from ...utils.responses import (
@@ -283,6 +289,68 @@ async def get_all_credit_requests(
         )
 
 
+@company_router.get("/llm-insights")
+async def get_llm_insights(
+    request: Request,
+    response: Response,
+    company_id: int,
+    current_user=Depends(auth_scheme),
+):
+    request_id = request.state.request_id
+    try:
+        with DatabaseSession() as db:
+            company = db.query(CompanyDB).filter(CompanyDB.id == company_id).first()
+            if not company:
+                return NotFoundResponse(
+                    request_id=request_id,
+                    process_time=0,
+                    func="get_llm_insights",
+                    message="Company not found",
+                )
+
+            latest_fi = (
+                db.query(FinancialInfoDB)
+                .filter(
+                    (FinancialInfoDB.company_id == company_id)
+                    & (FinancialInfoDB.status == "COMPLETED")
+                )
+                .order_by(FinancialInfoDB.created_at.desc())
+                .first()
+            )
+            if not latest_fi:
+                return NotFoundResponse(
+                    request_id=request_id,
+                    process_time=0,
+                    func="get_llm_insights",
+                    message="No hay información financiera completada aún",
+                )
+
+            # Ajusta estos campos a los tuyos reales si difieren
+            metrics = {
+                "sales": latest_fi.income_simulation or 0,
+                "cash_flow": latest_fi.average_cash_flow or 0,
+                "current_solvency": 1 - (latest_fi.debt_ratio or 0),
+                "asset_turnover": latest_fi.on_time_delivery or 0,
+                "ig_engagement": latest_fi.social_media_activity or 0,
+            }
+
+            tips = generate_insights(metrics)
+
+            return SuccessResponse(
+                request_id=request_id,
+                process_time=0,
+                func="get_llm_insights",
+                message="Insights generados",
+                payload={"insights": tips},
+            )
+    except Exception as e:
+        logger.exception(e)
+        response.status_code = 500
+        return InternalServerErrorResponse(
+            request_id=request_id, message=str(e), func="get_llm_insights"
+        )
+
+
 @company_router.post("/credit-request")
 async def create_credit_request(
     request: Request,
@@ -306,20 +374,80 @@ async def create_credit_request(
                     message="Company not found",
                 )
 
-            credit_request = CreditRequestDB(
+            # Crear la solicitud inicialmente
+            cr = CreditRequestDB(
                 company_id=credit_request.company_id,
                 amount=credit_request.amount,
-                status="PENDING",
+                reason="",          # lo llenamos luego
+                status="PENDING",   # lo actualizamos luego
             )
-            db.add(credit_request)
+            db.add(cr)
             db.commit()
-            db.refresh(credit_request)
-            logger.info(f"Credit request {credit_request.id} created")
+            db.refresh(cr)
+
+            # Obtener la última info financiera COMPLETED
+            latest_fi = (
+                db.query(FinancialInfoDB)
+                .filter(
+                    (FinancialInfoDB.company_id == company.id)
+                    & (FinancialInfoDB.status == "COMPLETED")
+                )
+                .order_by(FinancialInfoDB.created_at.desc())
+                .first()
+            )
+
+            if not latest_fi:
+                # Si no hay info financiera, dejamos PENDING
+                return SuccessResponse(
+                    request_id=request_id,
+                    process_time=0,
+                    func="create_credit_request",
+                    message="Credit request created (PENDING). No hay información financiera completada aún.",
+                )
+
+            # Armar métricas para el agente/LLM (ajusta campos a los tuyos reales)
+            metrics = {
+                "uid": str(company.id),
+                "sales": latest_fi.income_simulation or 0,
+                "cash_flow": latest_fi.average_cash_flow or 0,
+                "assets": None,
+                "liabilities": None,
+                "equity": None,
+                "current_solvency": 1 - (latest_fi.debt_ratio or 0),
+                "asset_turnover": latest_fi.on_time_delivery or 0,
+                "ig_engagement": latest_fi.social_media_activity or 0,
+            }
+
+            # 1) Corre el agente para decisión numérica (si lo tienes)
+            decision = credit_decision(metrics, float(credit_request.amount))
+
+            # 2) Pide insights al LLM (texto)
+            tips = generate_insights(metrics)
+
+            # Actualiza STATUS (APROBADO/DENEGADO) y REASON (multilínea)
+            is_ok = bool(decision.get("approved", False))
+            cr.status = "APROBADO" if is_ok else "DENEGADO"
+
+            reasons = []
+            # si tu decision trae razones, únelas
+            if "insights" in decision and isinstance(decision["insights"], list):
+                reasons.extend([str(x) for x in decision["insights"]])
+
+            # agrega tips del LLM
+            if tips:
+                reasons.extend([str(x) for x in tips])
+
+            cr.reason = "\n".join(reasons) if reasons else ""
+            db.commit()
+            db.refresh(cr)
+
+            logger.info(f"Credit request {cr.id} updated -> {cr.status}")
+
             return SuccessResponse(
                 request_id=request_id,
                 process_time=0,
                 func="create_credit_request",
-                message="Credit request created",
+                message=f"Credit request {cr.status}",
             )
     except Exception as e:
         logger.error(f"Error creating credit request: {e}")
@@ -327,3 +455,109 @@ async def create_credit_request(
         return InternalServerErrorResponse(
             request_id=request_id, message=str(e), func="create_credit_request"
         )
+
+
+@company_router.post("/analyze-with-llm")
+async def analyze_with_llm(
+    request: Request,
+    response: Response,
+    company_id: int,
+    amount: float = 0,
+    current_user=Depends(auth_scheme),
+):
+    """
+    2da función: calcula métricas + genera insights con LLM y (opcional) una decisión preliminar.
+    """
+    request_id = request.state.request_id
+    try:
+        with DatabaseSession() as db:
+            company = db.query(CompanyDB).filter(CompanyDB.id == company_id).first()
+            if not company:
+                return NotFoundResponse(
+                    request_id=request_id,
+                    process_time=0,
+                    func="analyze_with_llm",
+                    message="Company not found",
+                )
+
+            # asume que los PDFs/JSON se generan por fuera con el uid = company.ruc o similar
+            uid = company.ruc or str(company.id)
+            vals = analyze_company(uid)  # calcula + LLM insights
+            decision = credit_decision(vals, amount or 1.0)
+
+            return SuccessResponse(
+                request_id=request_id,
+                process_time=0,
+                func="analyze_with_llm",
+                message="Análisis generado con LLM",
+                payload={
+                    "metrics": vals,
+                    "decision": decision,
+                    "model": company_settings.MODEL,  # para auditar qué modelo usamos
+                },
+            )
+    except Exception as e:
+        logger.error(f"Error analyze_with_llm: {e}")
+        response.status_code = 500
+        return InternalServerErrorResponse(
+            request_id=request_id, message=str(e), func="analyze_with_llm"
+        )
+
+
+# ---- FIX en create_credit_request ----
+@company_router.post("/credit-request")
+async def create_credit_request(
+    request: Request,
+    response: Response,
+    credit_request: CreditRequestInfo,
+    current_user=Depends(auth_scheme),
+):
+    request_id = request.state.request_id
+    try:
+        with DatabaseSession() as db:
+            company = (
+                db.query(CompanyDB)
+                .filter(CompanyDB.id == credit_request.company_id)
+                .first()
+            )
+            if not company:
+                return NotFoundResponse(
+                    request_id=request_id,
+                    process_time=0,
+                    func="create_credit_request",
+                    message="Company not found",
+                )
+
+            # ANALIZA + DECIDE
+            uid = company.ruc or str(company.id)
+            vals = analyze_company(uid)
+            decision = credit_decision(vals, credit_request.amount)
+
+            status_text = "APROBADO" if decision["approved"] else "DENEGADO"
+            reason_text = "\n".join(f"- {r}" for r in decision.get("insights", [])) or "Sin observaciones."
+
+            credit_req = CreditRequestDB(
+                company_id=credit_request.company_id,
+                amount=credit_request.amount,
+                status=status_text,     # MAYÚSCULAS
+                reason=reason_text,     # texto multilinea
+            )
+            db.add(credit_req)
+            db.commit()
+            db.refresh(credit_req)
+
+            logger.info(f"Credit request {credit_req.id} created / {status_text}")
+
+            return SuccessResponse(
+                request_id=request_id,
+                process_time=0,
+                func="create_credit_request",
+                message=f"Credit request {status_text}",
+            )
+    except Exception as e:
+        logger.error(f"Error creating credit request: {e}")
+        response.status_code = 500
+        return InternalServerErrorResponse(
+            request_id=request_id, message=str(e), func="create_credit_request"
+        )
+    
